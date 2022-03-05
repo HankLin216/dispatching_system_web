@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from "typeorm";
-import { Task } from "./Task";
+import { Task } from "@entities";
 
 @Entity({ name: "projects" })
 export class Project {
@@ -18,6 +18,6 @@ export class Project {
   @Column({ type: "datetime" })
   CreateDate: Date;
 
-  @OneToMany(() => Task, (tk) => tk.pjid)
-  task: Task[];
+  @OneToMany(() => Task, (tk) => tk.project, { cascade: true })
+  tasks: Task[];
 }

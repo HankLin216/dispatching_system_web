@@ -8,7 +8,7 @@ import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import { makeStyles } from "@material-ui/styles";
 import MaterialTable from "material-table";
-import { Theme } from "@mui/material";
+import { Button, Theme } from "@mui/material";
 import tableIcons from "../utility/material-table-icon";
 import type { SampleInfo } from "../modules/@sample";
 import Table from "@mui/material/Table";
@@ -18,6 +18,24 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
+import TextField from "@mui/material/TextField";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogTitle from "@mui/material/DialogTitle";
+import InputAdornment from "@mui/material/InputAdornment";
+import FormatColorTextIcon from "@mui/icons-material/FormatColorText";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import FormControl from "@mui/material/FormControl";
+import ListItemText from "@mui/material/ListItemText";
+import Select, { SelectChangeEvent } from "@mui/material/Select";
+import Checkbox from "@mui/material/Checkbox";
+import { PostData } from "@modules/api/Project";
+import { Project } from "@entities";
+import type { Overwrite } from "utility/typeHelper";
+import moment from "moment";
 
 const useTabPanelStyles = makeStyles((theme: Theme) => ({
   root: {
@@ -111,39 +129,196 @@ function TesterStatusPanel() {
   );
 }
 
+const ITEM_HEIGHT = 48;
+const ITEM_PADDING_TOP = 8;
+const MenuProps = {
+  PaperProps: {
+    style: {
+      maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
+      width: 250,
+    },
+  },
+};
+
+const taskNames = [
+  "陽春麵",
+  "牛肉獅子頭",
+  "臭豆腐",
+  "螞蟻上樹",
+  "蚵仔煎",
+  "佛跳牆",
+  "豆魚油麵",
+  "九層塔什錦麵",
+  "滷蛋",
+  "東坡肉飯",
+  "地瓜稀飯",
+  "蚵仔麵線",
+];
+
 function ProjectPanel() {
   const classes = useTabPanelStyles();
-  const [data, setData] = useState();
+  const [data, setData] = useState<Project[]>([]);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [projectName, setProjectName] = React.useState("");
+  const [taskName, setTaskName] = React.useState<string[]>([]);
+
+  useEffect(() => {
+    async function initProjectData() {
+      await getProjectData();
+    }
+    initProjectData();
+  }, []);
+
+  const handleProjectNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setProjectName(event.target.value);
+  };
+
+  const handleDialogClickConfirm = async () => {
+    let data: PostData = {
+      ProjectName: projectName,
+      TaskNameList: taskName,
+    };
+
+    // add data
+    let res: boolean = await fetch("http://localhost:3000/api/projects", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }).then((res) => res.json());
+
+    handleDialogClose();
+
+    await getProjectData();
+  };
+
+  async function getProjectData() {
+    // get data
+    let fakeData = await fetch("http://localhost:3000/api/projects").then((res) => res.json());
+    // handle date type
+    let data: Project[] = fakeData.map(
+      (p: Overwrite<Project, { CreateDate: string; UpdateDate: string }>) => {
+        return { ...p, CreateDate: new Date(p.CreateDate), UpdateDate: new Date(p.UpdateDate) };
+      },
+    );
+
+    setData(data);
+  }
+
+  const handleDialogClickOpen = () => {
+    setDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setProjectName("");
+    setTaskName([]);
+    setDialogOpen(false);
+  };
+
+  const handleSelectTaskChange = (event: SelectChangeEvent<typeof taskName>) => {
+    const {
+      target: { value },
+    } = event;
+    setTaskName(
+      // On autofill we get a stringified value.
+      typeof value === "string" ? value.split(",") : value,
+    );
+  };
 
   return (
-    <div className={classes.root}>
-      <TableContainer component={Paper}>
-        <Table sx={{ minWidth: 650 }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>Dessert (100g serving)</TableCell>
-              <TableCell align="right">Calories</TableCell>
-              <TableCell align="right">Fat&nbsp;(g)</TableCell>
-              <TableCell align="right">Carbs&nbsp;(g)</TableCell>
-              <TableCell align="right">Protein&nbsp;(g)</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {/* {rows.map((row) => (
-              <TableRow key={row.name} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                <TableCell component="th" scope="row">
-                  {row.name}
-                </TableCell>
-                <TableCell align="right">{row.calories}</TableCell>
-                <TableCell align="right">{row.fat}</TableCell>
-                <TableCell align="right">{row.carbs}</TableCell>
-                <TableCell align="right">{row.protein}</TableCell>
-              </TableRow>
-            ))} */}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </div>
+    <>
+      <Grid container spacing={2} className={classes.root}>
+        <Grid item xs={12}>
+          <Button variant="outlined" onClick={handleDialogClickOpen}>
+            ADD PROJECT
+          </Button>
+        </Grid>
+        <Grid item xs={12}>
+          <TableContainer component={Paper}>
+            <Table sx={{ minWidth: 650 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Project ID</TableCell>
+                  <TableCell>Project Name</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Update Date</TableCell>
+                  <TableCell>Create Date</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.map((row) => (
+                  <TableRow
+                    key={row.ProjectName}
+                    sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                  >
+                    <TableCell component="th" scope="row">
+                      {row.id}
+                    </TableCell>
+                    <TableCell>{row.ProjectName}</TableCell>
+                    <TableCell>{row.Status}</TableCell>
+                    <TableCell>{moment(row.UpdateDate).format("yyyy-MM-DD HH:mm:ss")}</TableCell>
+                    <TableCell>{moment(row.CreateDate).format("yyyy-MM-DD HH:mm:ss")}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Grid>
+      </Grid>
+      <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth={"sm"} fullWidth>
+        <DialogTitle>Create Project</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2}>
+            <Grid item sm={12}>
+              <DialogContentText>Create serveral tasks randomly.</DialogContentText>
+            </Grid>
+            <Grid item sm={12}>
+              <TextField
+                autoFocus
+                margin="dense"
+                id="ProjectName"
+                label="Project Name"
+                type="email"
+                fullWidth
+                variant="standard"
+                value={projectName}
+                onChange={handleProjectNameChange}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <FormatColorTextIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item sm={12}>
+              <FormControl variant={"standard"} sx={{ width: "100%" }}>
+                <InputLabel id="task-multiple-checkbox-label">Tasks</InputLabel>
+                <Select
+                  labelId="task-multiple-checkbox-label"
+                  id="task-multiple-checkbox"
+                  multiple
+                  value={taskName}
+                  onChange={handleSelectTaskChange}
+                  renderValue={(selected) => selected.join(", ")}
+                  MenuProps={MenuProps}
+                >
+                  {taskNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      <Checkbox checked={taskName.indexOf(name) > -1} />
+                      <ListItemText primary={name} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDialogClose}>Cancel</Button>
+          <Button onClick={handleDialogClickConfirm}>Confirm</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 

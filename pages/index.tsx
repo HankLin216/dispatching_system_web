@@ -7,9 +7,7 @@ import Tabs from "@mui/material/Tabs";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import { makeStyles } from "@material-ui/styles";
-import MaterialTable from "material-table";
 import { Button, Theme } from "@mui/material";
-import tableIcons from "../utility/material-table-icon";
 import type { SampleInfo } from "../modules/@sample";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -32,14 +30,29 @@ import FormControl from "@mui/material/FormControl";
 import ListItemText from "@mui/material/ListItemText";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
 import Checkbox from "@mui/material/Checkbox";
-import { PostData } from "@modules/api/Project";
-import { Project } from "@entities";
+import { PostData, Response as ProjectResponse } from "@modules/api/Project";
+import { Response as TaskResponse } from "@modules/api/Task";
+import { Project, Task } from "@modules/mysql";
 import type { Overwrite } from "utility/typeHelper";
 import moment from "moment";
+import Divider from "@mui/material/Divider";
+import {
+  DataGrid,
+  GridColDef,
+  GridSelectionModel,
+  GridCallbackDetails,
+  GridCellParams,
+  MuiEvent,
+} from "@mui/x-data-grid";
+import { useAppSelector } from "@redux/hook";
+import { Actions } from "@redux/slices/indexSlice";
+import { wrapper } from "@redux/store";
+import { GetProjectList } from "./api/projects";
+import { useDispatch } from "react-redux";
 
 const useTabPanelStyles = makeStyles((theme: Theme) => ({
   root: {
-    paddingTop: theme.spacing(5),
+    paddingTop: theme.spacing(2),
   },
 }));
 
@@ -155,19 +168,127 @@ const taskNames = [
   "蚵仔麵線",
 ];
 
+const projectColumns: GridColDef[] = [
+  { field: "id", headerName: "ID", width: 80 },
+  { field: "ProjectName", headerName: "Project Name", width: 150 },
+  { field: "Status", headerName: "Status", width: 150 },
+  { field: "UpdateDate", headerName: "Update Date", width: 200 },
+  { field: "CreateDate", headerName: "Create Date", width: 200 },
+];
+
+const taskColumns: GridColDef[] = [
+  { field: "id", headerName: "ID", width: 80 },
+  { field: "TaskName", headerName: "Task Name", width: 150 },
+  { field: "Status", headerName: "Status", width: 150 },
+  { field: "Memo", headerName: "Memo", width: 150 },
+  { field: "UpdateDate", headerName: "Update Date", width: 200 },
+  { field: "CreateDate", headerName: "Create Date", width: 200 },
+];
+
 function ProjectPanel() {
   const classes = useTabPanelStyles();
-  const [data, setData] = useState<Project[]>([]);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const dispatch = useDispatch();
+  const { ProjectList, SelectedTaskList } = useAppSelector((s) => s.index);
+
+  const [selectionModel, setSelectionModel] = React.useState<GridSelectionModel>([]);
+
+  const handleDialogClickOpen = () => {
+    dispatch(Actions.CHANGE_ADDDIALOG_STATUS());
+  };
+
+  function onProjectSelectChange(
+    newSelectionModel: GridSelectionModel,
+    details: GridCallbackDetails,
+  ) {
+    setSelectionModel(newSelectionModel);
+  }
+
+  function onProjectTableCellClick(params: GridCellParams, event: MuiEvent<React.MouseEvent>) {
+    event.defaultMuiPrevented = true;
+    let selectProjectId = params.row.id;
+    // setTaskData(data.filter((r) => r.id === selectProjectId)[0].tasks);
+  }
+
+  return (
+    <>
+      <Grid container spacing={2} className={classes.root}>
+        <Grid container item xs={12} spacing={2}>
+          <Grid item>
+            <Typography variant="h5">Project Lists</Typography>
+          </Grid>
+          <Grid item>
+            <Button variant="outlined" onClick={handleDialogClickOpen}>
+              ADD PROJECT
+            </Button>
+          </Grid>
+          <Grid item>
+            <Button variant="outlined" color="error">
+              DELETE PROJECT
+            </Button>
+          </Grid>
+        </Grid>
+        <Grid item xs={12} style={{ height: 350 }}>
+          <DataGrid
+            columns={projectColumns}
+            rows={ProjectList}
+            checkboxSelection={true}
+            disableSelectionOnClick
+            onSelectionModelChange={onProjectSelectChange}
+            onCellClick={onProjectTableCellClick}
+          ></DataGrid>
+        </Grid>
+        <Grid item xs={12}>
+          <Divider />
+        </Grid>
+        <Grid container item xs={12} spacing={2}>
+          <Grid item>
+            <Typography variant="h5">Task Lists</Typography>
+          </Grid>
+          <Grid item>
+            <Button variant="outlined" color="error">
+              DELETE TASK
+            </Button>
+          </Grid>
+        </Grid>
+        <Grid item xs={12} style={{ height: 400 }}>
+          <DataGrid
+            columns={taskColumns}
+            rows={SelectedTaskList}
+            checkboxSelection={true}
+            disableSelectionOnClick
+          ></DataGrid>
+        </Grid>
+      </Grid>
+      <AddProjectDialog></AddProjectDialog>
+    </>
+  );
+}
+
+async function getProjectData(): Promise<
+  Overwrite<Project, { CreateDate: string; UpdateDate: string }>[]
+> {
+  // get data
+  let fakePjData: Overwrite<Project, { CreateDate: string; UpdateDate: string }>[] = await fetch(
+    "http://localhost:3000/api/projects",
+  ).then((res) => res.json());
+  let pjList = fakePjData.map((r) => {
+    return {
+      ...r,
+      CreateDate: r.CreateDate.replace("T", " ").replace("Z", ""),
+      UpdateDate: r.UpdateDate.replace("T", " ").replace("Z", ""),
+    };
+  });
+
+  return pjList;
+}
+
+const AddProjectDialog = () => {
+  const AddProjectDialogStatus = useAppSelector((state) => state.index.AddProjectDialogStatus);
+  const dispatch = useDispatch();
+
+  // const [dialogOpen, setDialogOpen] = React.useState(false);
   const [projectName, setProjectName] = React.useState("");
   const [taskName, setTaskName] = React.useState<string[]>([]);
-
-  useEffect(() => {
-    async function initProjectData() {
-      await getProjectData();
-    }
-    initProjectData();
-  }, []);
 
   const handleProjectNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setProjectName(event.target.value);
@@ -180,37 +301,42 @@ function ProjectPanel() {
     };
 
     // add data
-    let res: boolean = await fetch("http://localhost:3000/api/projects", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }).then((res) => res.json());
+    let { result, insertProjectID, message }: ProjectResponse = await fetch(
+      "http://localhost:3000/api/projects",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ).then((res) => res.json());
+
+    let taskList: Overwrite<Task, { CreateDate: string; UpdateDate: string }>[] = [];
+    if (insertProjectID !== undefined) {
+      // get insert task
+      taskList = await fetch(`http://localhost:3000/api/tasks?ProjectID=${insertProjectID}`).then(
+        (res) => res.json(),
+      );
+      // handle DateTime Type
+      taskList = taskList.map((r) => {
+        return {
+          ...r,
+          CreateDate: r.CreateDate.replace("T", " ").replace("Z", ""),
+          UpdateDate: r.UpdateDate.replace("T", " ").replace("Z", ""),
+        };
+      });
+    }
 
     handleDialogClose();
 
-    await getProjectData();
-  };
-
-  async function getProjectData() {
-    // get data
-    let fakeData = await fetch("http://localhost:3000/api/projects").then((res) => res.json());
-    // handle date type
-    let data: Project[] = fakeData.map(
-      (p: Overwrite<Project, { CreateDate: string; UpdateDate: string }>) => {
-        return { ...p, CreateDate: new Date(p.CreateDate), UpdateDate: new Date(p.UpdateDate) };
-      },
-    );
-
-    setData(data);
-  }
-
-  const handleDialogClickOpen = () => {
-    setDialogOpen(true);
+    // update data
+    let newPjData = await getProjectData();
+    dispatch(Actions.UPDATE_PJLIST(newPjData));
+    dispatch(Actions.UPDATE_SELECTED_TKLIST(taskList));
   };
 
   const handleDialogClose = () => {
     setProjectName("");
     setTaskName([]);
-    setDialogOpen(false);
+    dispatch(Actions.CHANGE_ADDDIALOG_STATUS());
   };
 
   const handleSelectTaskChange = (event: SelectChangeEvent<typeof taskName>) => {
@@ -224,103 +350,63 @@ function ProjectPanel() {
   };
 
   return (
-    <>
-      <Grid container spacing={2} className={classes.root}>
-        <Grid item xs={12}>
-          <Button variant="outlined" onClick={handleDialogClickOpen}>
-            ADD PROJECT
-          </Button>
-        </Grid>
-        <Grid item xs={12}>
-          <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Project ID</TableCell>
-                  <TableCell>Project Name</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Update Date</TableCell>
-                  <TableCell>Create Date</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.map((row) => (
-                  <TableRow
-                    key={row.ProjectName}
-                    sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
-                  >
-                    <TableCell component="th" scope="row">
-                      {row.id}
-                    </TableCell>
-                    <TableCell>{row.ProjectName}</TableCell>
-                    <TableCell>{row.Status}</TableCell>
-                    <TableCell>{moment(row.UpdateDate).format("yyyy-MM-DD HH:mm:ss")}</TableCell>
-                    <TableCell>{moment(row.CreateDate).format("yyyy-MM-DD HH:mm:ss")}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Grid>
-      </Grid>
-      <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth={"sm"} fullWidth>
-        <DialogTitle>Create Project</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2}>
-            <Grid item sm={12}>
-              <DialogContentText>Create serveral tasks randomly.</DialogContentText>
-            </Grid>
-            <Grid item sm={12}>
-              <TextField
-                autoFocus
-                margin="dense"
-                id="ProjectName"
-                label="Project Name"
-                type="email"
-                fullWidth
-                variant="standard"
-                value={projectName}
-                onChange={handleProjectNameChange}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <FormatColorTextIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item sm={12}>
-              <FormControl variant={"standard"} sx={{ width: "100%" }}>
-                <InputLabel id="task-multiple-checkbox-label">Tasks</InputLabel>
-                <Select
-                  labelId="task-multiple-checkbox-label"
-                  id="task-multiple-checkbox"
-                  multiple
-                  value={taskName}
-                  onChange={handleSelectTaskChange}
-                  renderValue={(selected) => selected.join(", ")}
-                  MenuProps={MenuProps}
-                >
-                  {taskNames.map((name) => (
-                    <MenuItem key={name} value={name}>
-                      <Checkbox checked={taskName.indexOf(name) > -1} />
-                      <ListItemText primary={name} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+    <Dialog open={AddProjectDialogStatus} onClose={handleDialogClose} maxWidth={"sm"} fullWidth>
+      <DialogTitle>Create Project</DialogTitle>
+      <DialogContent>
+        <Grid container spacing={2}>
+          <Grid item sm={12}>
+            <DialogContentText>Create serveral tasks randomly.</DialogContentText>
           </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDialogClose}>Cancel</Button>
-          <Button onClick={handleDialogClickConfirm}>Confirm</Button>
-        </DialogActions>
-      </Dialog>
-    </>
+          <Grid item sm={12}>
+            <TextField
+              autoFocus
+              margin="dense"
+              id="ProjectName"
+              label="Project Name"
+              type="email"
+              fullWidth
+              variant="standard"
+              value={projectName}
+              onChange={handleProjectNameChange}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <FormatColorTextIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item sm={12}>
+            <FormControl variant={"standard"} sx={{ width: "100%" }}>
+              <InputLabel id="task-multiple-checkbox-label">Tasks</InputLabel>
+              <Select
+                labelId="task-multiple-checkbox-label"
+                id="task-multiple-checkbox"
+                multiple
+                value={taskName}
+                onChange={handleSelectTaskChange}
+                renderValue={(selected) => selected.join(", ")}
+                MenuProps={MenuProps}
+              >
+                {taskNames.map((name) => (
+                  <MenuItem key={name} value={name}>
+                    <Checkbox checked={taskName.indexOf(name) > -1} />
+                    <ListItemText primary={name} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleDialogClose}>Cancel</Button>
+        <Button onClick={handleDialogClickConfirm}>Confirm</Button>
+      </DialogActions>
+    </Dialog>
   );
-}
+};
 
 const useNavTabsStyles = makeStyles({
   root: {
@@ -365,12 +451,31 @@ const NavTabs = () => {
 
 const Home: NextPage = () => {
   return (
-    <div style={{ height: "100%", backgroundColor: "WhiteSmoke" }}>
-      <Container maxWidth="md" style={{ height: "100%" }}>
+    <div style={{ height: "100%" }}>
+      <Container maxWidth="lg" style={{ height: "100%" }}>
         <NavTabs></NavTabs>
       </Container>
     </div>
   );
 };
+
+export const getServerSideProps = wrapper.getServerSideProps((store) => async ({ req }) => {
+  // get data
+  let pjList: Project[] = await GetProjectList();
+  // handle date type (to string)
+  let fakePjData = pjList.map((r) => {
+    return {
+      ...r,
+      CreateDate: moment(r.CreateDate).format("yyyy-MM-DD HH:mm:ss"),
+      UpdateDate: moment(r.UpdateDate).format("yyyy-MM-DD HH:mm:ss"),
+    };
+  });
+
+  store.dispatch(Actions.SERVER_INIT_PROJECTLIST(fakePjData));
+
+  return {
+    props: {},
+  };
+});
 
 export default Home;

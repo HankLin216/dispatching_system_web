@@ -3,9 +3,9 @@
     "lib": ["es5", "es6", "DOM"],
     "baseUrl": ".",
     "paths": {
-      "@mysql/*": ["mysqlDB/*"],
       "@entities": ["mysqlDB/entity/index.ts"],
-      "@modules/*": ["modules/*"]
+      "@modules/*": ["modules/*"],
+      "@redux/*": ["redux/*"]
     },
     "target": "es5",
     "module": "commonjs",

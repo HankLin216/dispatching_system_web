@@ -1,30 +1,20 @@
-import * as React from "react";
+import React, { FC, useEffect } from "react";
+import { wrapper } from "@redux/store";
+import { Provider } from "react-redux";
+
 import type { AppProps } from "next/app";
-import { CacheProvider, EmotionCache } from "@emotion/react";
 import { CssBaseline } from "@mui/material";
 import { MuiThemeProvider } from "@material-ui/core/styles";
 
-import "@fontsource/roboto/300.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
-
-import createEmotionCache from "../utility/createEmotionCache";
 import lightTheme from "../styles/theme/lightTheme";
 import "../styles/globals.css";
-import { useEffect } from "react";
-
-import "reflect-metadata";
-
 interface MyAppProps extends AppProps {
-  emotionCache?: EmotionCache;
+  pageProps: any;
+  Component: any;
+  store: any;
 }
 
-const clientSideEmotionCache = createEmotionCache();
-
-const MyApp: React.FunctionComponent<MyAppProps> = (props) => {
-  const { Component, emotionCache = clientSideEmotionCache, pageProps } = props;
-
+const MyApp: FC<MyAppProps> = ({ Component, ...rest }) => {
   useEffect(() => {
     // Remove the server-side injected CSS.
     const jssStyles = document.querySelector("#jss-server-side");
@@ -33,14 +23,36 @@ const MyApp: React.FunctionComponent<MyAppProps> = (props) => {
     }
   }, []);
 
+  const { store, props } = wrapper.useWrappedStore(rest);
   return (
-    <CacheProvider value={emotionCache}>
+    <Provider store={store}>
       <MuiThemeProvider theme={lightTheme}>
         <CssBaseline />
-        <Component {...pageProps} />
+        <Component {...props.pageProps} />
       </MuiThemeProvider>
-    </CacheProvider>
+    </Provider>
   );
 };
 
 export default MyApp;
+
+// const MyApp: React.FunctionComponent<MyAppProps> = ({ Component, pageProps, store, ...rest }) => {
+//   useEffect(() => {
+//     // Remove the server-side injected CSS.
+//     const jssStyles = document.querySelector("#jss-server-side");
+//     if (jssStyles) {
+//       (jssStyles as any).parentElement.removeChild(jssStyles);
+//     }
+//   }, []);
+
+//   return (
+//     <Provider store={store}>
+//       <MuiThemeProvider theme={lightTheme}>
+//         <CssBaseline />
+//         <Component {...pageProps} />
+//       </MuiThemeProvider>
+//     </Provider>
+//   );
+// };
+
+// export default wrapper.withRedux(MyApp);

@@ -5,6 +5,10 @@ export interface PostData {
   TaskNameList: string[];
 }
 
+export interface DeleteData {
+  ProjectIds: number[];
+}
+
 export interface Response {
   result: boolean;
   insertProjectID?: number;

@@ -6,7 +6,7 @@ import mysql from "mysql2/promise";
 
 export async function GetTaskListByProjectID(projectID: number): Promise<Task[]> {
   let conn = await mysql.createConnection(config.mysqlConfig);
-  const [rows, _] = await conn.execute("Select * from tasks where pj = ?", projectID);
+  const [rows, _] = await conn.execute("Select * from tasks where pjid = ?", [projectID]);
   return rows as Task[];
 }
 
@@ -19,6 +19,7 @@ export default async function handler(
       case "GET":
         let { ID, ProjectID } = req.query;
         let taskList: Task[] = [];
+        // get by project id
         if (ID === undefined && ProjectID !== undefined) {
           taskList = await GetTaskListByProjectID(parseInt(ProjectID as string, 10));
         }

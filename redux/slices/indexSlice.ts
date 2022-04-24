@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { HYDRATE } from "next-redux-wrapper";
 import { Project, Task } from "@modules/mysql";
-import type { Overwrite } from "utility/typeHelper";
+import type { Overwrite } from "lib/typeHelper";
 
 interface State {
   AddProjectDialogStatus: boolean;
@@ -53,6 +53,15 @@ export const indexSlice = createSlice({
       return {
         ...state,
         ProjectList: [...action.payload],
+      };
+    },
+    SERVER_INIT_TASKLIST: (
+      state,
+      action: PayloadAction<Overwrite<Task, { CreateDate: string; UpdateDate: string }>[]>,
+    ) => {
+      return {
+        ...state,
+        SelectedTaskList: [...action.payload],
       };
     },
   },

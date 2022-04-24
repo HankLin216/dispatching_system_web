@@ -6,7 +6,7 @@ declare module "@mui/material/styles" {
       mode: string;
     };
   }
-  // 允许配置文件使用 `createTheme`
+
   interface ThemeOptions {
     palette?: PaletteOptions;
   }

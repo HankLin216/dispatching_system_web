@@ -30,10 +30,10 @@ import FormControl from "@mui/material/FormControl";
 import ListItemText from "@mui/material/ListItemText";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
 import Checkbox from "@mui/material/Checkbox";
-import { PostData, Response as ProjectResponse } from "@modules/api/Project";
+import { DeleteData, PostData, Response as ProjectResponse } from "@modules/api/Project";
 import { Response as TaskResponse } from "@modules/api/Task";
 import { Project, Task } from "@modules/mysql";
-import type { Overwrite } from "utility/typeHelper";
+import type { Overwrite } from "lib/typeHelper";
 import moment from "moment";
 import Divider from "@mui/material/Divider";
 import {
@@ -49,6 +49,7 @@ import { Actions } from "@redux/slices/indexSlice";
 import { wrapper } from "@redux/store";
 import { GetProjectList } from "./api/projects";
 import { useDispatch } from "react-redux";
+import { GetTaskListByProjectID } from "./api/tasks";
 
 const useTabPanelStyles = makeStyles((theme: Theme) => ({
   root: {
@@ -178,6 +179,7 @@ const projectColumns: GridColDef[] = [
 
 const taskColumns: GridColDef[] = [
   { field: "id", headerName: "ID", width: 80 },
+  { field: "pjid", headerName: "PJID", width: 80 },
   { field: "TaskName", headerName: "Task Name", width: 150 },
   { field: "Status", headerName: "Status", width: 150 },
   { field: "Memo", headerName: "Memo", width: 150 },
@@ -196,6 +198,48 @@ function ProjectPanel() {
     dispatch(Actions.CHANGE_ADDDIALOG_STATUS());
   };
 
+  const handleOnDeleteProjectClick = async () => {
+    // if nothing selected
+    if (selectionModel.length === 0) {
+      return;
+    }
+    // delete
+    let deleteData: DeleteData = {
+      ProjectIds: selectionModel as number[],
+    };
+    let { result }: ProjectResponse = await fetch("http://localhost:3000/api/projects", {
+      method: "Delete",
+      body: JSON.stringify(deleteData),
+    }).then((res) => res.json());
+
+    if (!result) {
+      // fail
+      return;
+    }
+
+    // update project and task list
+    let firstPjid = null;
+    // get all projects
+    let pjList: Overwrite<Project, { CreateDate: string; UpdateDate: string }>[] =
+      await getProjectData();
+    dispatch(Actions.UPDATE_PJLIST(pjList));
+
+    if (pjList.length === 0) {
+      // empty
+      dispatch(Actions.UPDATE_SELECTED_TKLIST([]));
+    } else if (
+      SelectedTaskList.length === 0 ||
+      (SelectedTaskList.length !== 0 && selectionModel.includes(SelectedTaskList[0].pjid))
+    ) {
+      // get the first pjid
+      firstPjid = pjList[0].id;
+      // get the taskList
+      let tkList: Overwrite<Task, { CreateDate: string; UpdateDate: string }>[] =
+        await getTaskDataByProjectID(firstPjid.toString());
+      dispatch(Actions.UPDATE_SELECTED_TKLIST(tkList));
+    }
+  };
+
   function onProjectSelectChange(
     newSelectionModel: GridSelectionModel,
     details: GridCallbackDetails,
@@ -205,8 +249,11 @@ function ProjectPanel() {
 
   function onProjectTableCellClick(params: GridCellParams, event: MuiEvent<React.MouseEvent>) {
     event.defaultMuiPrevented = true;
-    let selectProjectId = params.row.id;
-    // setTaskData(data.filter((r) => r.id === selectProjectId)[0].tasks);
+    let selectProjectId: number = params.row.id;
+    // update task list
+    getTaskDataByProjectID(selectProjectId.toString()).then((data) => {
+      dispatch(Actions.UPDATE_SELECTED_TKLIST(data));
+    });
   }
 
   return (
@@ -222,7 +269,7 @@ function ProjectPanel() {
             </Button>
           </Grid>
           <Grid item>
-            <Button variant="outlined" color="error">
+            <Button variant="outlined" color="error" onClick={handleOnDeleteProjectClick}>
               DELETE PROJECT
             </Button>
           </Grid>
@@ -232,7 +279,6 @@ function ProjectPanel() {
             columns={projectColumns}
             rows={ProjectList}
             checkboxSelection={true}
-            disableSelectionOnClick
             onSelectionModelChange={onProjectSelectChange}
             onCellClick={onProjectTableCellClick}
           ></DataGrid>
@@ -244,19 +290,9 @@ function ProjectPanel() {
           <Grid item>
             <Typography variant="h5">Task Lists</Typography>
           </Grid>
-          <Grid item>
-            <Button variant="outlined" color="error">
-              DELETE TASK
-            </Button>
-          </Grid>
         </Grid>
         <Grid item xs={12} style={{ height: 400 }}>
-          <DataGrid
-            columns={taskColumns}
-            rows={SelectedTaskList}
-            checkboxSelection={true}
-            disableSelectionOnClick
-          ></DataGrid>
+          <DataGrid columns={taskColumns} rows={SelectedTaskList}></DataGrid>
         </Grid>
       </Grid>
       <AddProjectDialog></AddProjectDialog>
@@ -282,6 +318,24 @@ async function getProjectData(): Promise<
   return pjList;
 }
 
+async function getTaskDataByProjectID(pjid: string) {
+  // get data
+  let fakeTkData: Overwrite<Task, { CreateDate: string; UpdateDate: string }>[] = await fetch(
+    "http://localhost:3000/api/tasks?" +
+      new URLSearchParams({
+        ProjectID: pjid,
+      }),
+  ).then((res) => res.json());
+  let tkList = fakeTkData.map((r) => {
+    return {
+      ...r,
+      CreateDate: r.CreateDate.replace("T", " ").replace("Z", ""),
+      UpdateDate: r.UpdateDate.replace("T", " ").replace("Z", ""),
+    };
+  });
+  return tkList;
+}
+
 const AddProjectDialog = () => {
   const AddProjectDialogStatus = useAppSelector((state) => state.index.AddProjectDialogStatus);
   const dispatch = useDispatch();
@@ -300,7 +354,7 @@ const AddProjectDialog = () => {
       TaskNameList: taskName,
     };
 
-    // add data
+    // Add data
     let { result, insertProjectID, message }: ProjectResponse = await fetch(
       "http://localhost:3000/api/projects",
       {
@@ -309,28 +363,18 @@ const AddProjectDialog = () => {
       },
     ).then((res) => res.json());
 
+    // get the insert task data
     let taskList: Overwrite<Task, { CreateDate: string; UpdateDate: string }>[] = [];
-    if (insertProjectID !== undefined) {
-      // get insert task
-      taskList = await fetch(`http://localhost:3000/api/tasks?ProjectID=${insertProjectID}`).then(
-        (res) => res.json(),
-      );
-      // handle DateTime Type
-      taskList = taskList.map((r) => {
-        return {
-          ...r,
-          CreateDate: r.CreateDate.replace("T", " ").replace("Z", ""),
-          UpdateDate: r.UpdateDate.replace("T", " ").replace("Z", ""),
-        };
-      });
+    if (result && insertProjectID !== undefined) {
+      // update data
+      let newPjData = await getProjectData();
+      taskList = await getTaskDataByProjectID(insertProjectID?.toString());
+
+      dispatch(Actions.UPDATE_PJLIST(newPjData));
+      dispatch(Actions.UPDATE_SELECTED_TKLIST(taskList));
     }
 
     handleDialogClose();
-
-    // update data
-    let newPjData = await getProjectData();
-    dispatch(Actions.UPDATE_PJLIST(newPjData));
-    dispatch(Actions.UPDATE_SELECTED_TKLIST(taskList));
   };
 
   const handleDialogClose = () => {
@@ -459,6 +503,7 @@ const Home: NextPage = () => {
   );
 };
 
+// server side code
 export const getServerSideProps = wrapper.getServerSideProps((store) => async ({ req }) => {
   // get data
   let pjList: Project[] = await GetProjectList();
@@ -471,7 +516,28 @@ export const getServerSideProps = wrapper.getServerSideProps((store) => async ({
     };
   });
 
-  store.dispatch(Actions.SERVER_INIT_PROJECTLIST(fakePjData));
+  if (fakePjData.length !== 0) {
+    // update project list
+    store.dispatch(Actions.SERVER_INIT_PROJECTLIST(fakePjData));
+  }
+
+  // get the default task list
+  let taskList = store.getState().index.SelectedTaskList;
+  if (taskList.length === 0 && fakePjData.length !== 0) {
+    let defaultPjid = fakePjData[0].id;
+    let tkList: Task[] = await GetTaskListByProjectID(defaultPjid);
+    // handle data type (to string)
+    let fakeTkData = tkList.map((r) => {
+      return {
+        ...r,
+        CreateDate: moment(r.CreateDate).format("yyyy-MM-DD HH:mm:ss"),
+        UpdateDate: moment(r.UpdateDate).format("yyyy-MM-DD HH:mm:ss"),
+      };
+    });
+
+    // update selected task list
+    store.dispatch(Actions.SERVER_INIT_TASKLIST(fakeTkData));
+  }
 
   return {
     props: {},
